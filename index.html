@@ -132,9 +132,11 @@ const CONFIG = {
   gap: 16,
   // Shuffle for best fit: photos after a block it may pull from, most per column, most in all (by
   // column count), search budget, most extra px added above a pulled photo.
-  // swapTail: last photos per column that may be swapped out; spaceKept: spacing may also grow above
-  // photos that stay in a rebuilt column (never in the clicked photo's column).
-  bestFit: { pool: 20, perColumn: 3, maxPull: { 2: 4, 3: 6, 4: 8 }, steps: 300000, maxExtraGap: 12, swapTail: 3, spaceKept: true },
+  // swapTail: last photos per column that may be swapped out; anchorDrop: photos above the clicked one
+  // that may leave its column so it moves up; spaceKept: spacing may also grow above photos that stay
+  // in a rebuilt column; tolerance: px a column may end short of the line, tried in order.
+  bestFit: { pool: 30, perColumn: 3, maxPull: { 2: 4, 3: 6, 4: 8 }, steps: 60000, maxExtraGap: 12, swapTail: 6, anchorDrop: 2,
+             spaceKept: true, tolerance: [0, 12, 24, 48, 96, 200, 400] },
 };
 
 /* ---------- Helpers ---------- */
@@ -216,12 +218,15 @@ function masonryGeom(ctx) {
   return { gap, cw, ih, tileH: p => ih(p) + env.capH };
 }
 
-// Shuffle for best fit, first try. Only the photo the block was added under is fixed: its bottom edge is
-// the line, and its column stays as it is. Every other column keeps its top photos but its last one or
-// two can be swapped out, and the space down to the line is refilled with the closest matches: photos
-// from just above or just after the block whose heights reach the line exactly (a single photo the same
-// height is the ideal). Photos swapped out move to just below the block, in their order. Fewest photos
-// crossing the block wins, then fewest changing column, then fewest photos. Returns null if no exact fit.
+// Shuffle for best fit. The block stays directly under the photo it was added under (the anchor), and
+// that photo's bottom edge is the line. To finish level:
+//  - the anchor may move up its column, by dropping up to `anchorDrop` photos above it;
+//  - every other column keeps its top photos, but up to its last `swapTail` photos (or all of them)
+//    can be swapped out, and the space down to the line is refilled with the closest matches from those
+//    photos or the next `pool` photos after the block; spacing above refilled photos can grow a little.
+// Photos swapped out move to just below the block, in their order. If nothing fits exactly, a growing
+// shortfall is allowed (see `tolerance`) and the evenest result wins. Ties: fewest photos crossing the
+// block, then fewest changing column, then fewest photos.
 const swapCache = new Map();
 function swapToLine(must, pool, anchorIndex, ctx) {
   const M = CONFIG.bestFit, cols = ctx.cols, { tileH, gap } = masonryGeom(ctx);
@@ -230,105 +235,116 @@ function swapToLine(must, pool, anchorIndex, ctx) {
   if (ai < 0) return null;
   const key = [must.map(p => p.index).join(','), pool.map(p => p.index).join(','), anchorIndex, base.ends.map(Math.round).join(','), cols, gap].join('|');
   if (swapCache.has(key)) return swapCache.get(key);
-  // Each column top to bottom, with each photo's position in the section.
   const colList = Array.from({ length: cols }, () => []);
   must.forEach((p, i) => colList[base.assign[i]].push(i));
-  const aCol = base.assign[ai];
-  const aStack = colList[aCol].slice(0, colList[aCol].indexOf(ai) + 1);
-  const heightOf = idxs => idxs.reduce((h, i, k) => h + (k ? gap + base.gapAbove[i] : 0) + tileH(must[i]), 0);
-  const T = heightOf(aStack);
-  // Photos that may move: the last photos of each other column, any photos under the anchor in its
-  // column, and the pool after the block.
+  const aCol = base.assign[ai], aPos = colList[aCol].indexOf(ai);
+  const stackHeight = (idxs, added) => idxs.reduce((h, i, k) => h + (k ? gap + base.gapAbove[i] : 0) + tileH(must[i]), 0);
+  const others = [...Array(cols).keys()].filter(c => c !== aCol);
+
+  // Photos that may move: the swappable end of each other column, photos above the anchor that may be
+  // dropped, photos under the anchor, and the pool after the block.
   const free = [];
-  colList.forEach((list, c) => {
-    if (c === aCol) list.slice(aStack.length).forEach(i => free.push({ p: must[i], from: 'above', col: c }));
-    else list.slice(Math.max(0, list.length - M.swapTail)).forEach(i => free.push({ p: must[i], from: 'above', col: c }));
-  });
+  others.forEach(c => colList[c].slice(Math.max(0, colList[c].length - M.swapTail)).forEach(i => free.push({ p: must[i], from: 'above', col: c, i })));
+  colList[aCol].slice(Math.max(0, aPos - M.anchorDrop), aPos).forEach(i => free.push({ p: must[i], from: 'above', col: aCol, i }));
+  colList[aCol].slice(aPos + 1).forEach(i => free.push({ p: must[i], from: 'above', col: aCol, i }));
   pool.forEach(p => free.push({ p, from: 'below', col: -1 }));
-  if (free.length > 31) return null;   // photos are tracked as bits of one number
-  const bit = new Map(free.map((f, i) => [f.p, i]));
+  const slot = new Map(free.filter(f => f.from === 'above').map((f, k) => [f.i, k]));
   const fh = free.map(f => tileH(f.p));
   const bySize = Array.from({ length: M.perColumn + 1 }, () => []);
-  bySize[0].push({ ids: [], h: 0, n: 0, mask: 0 });
-  (function gen(s, ids) {
+  bySize[0].push({ ids: [], h: 0, n: 0 });
+  (function gen(s, ids, h) {
     for (let i = s; i < free.length; i++) {
       ids.push(i);
-      bySize[ids.length].push({ ids: ids.slice(), h: ids.reduce((a, x) => a + fh[x], 0), n: ids.length, mask: ids.reduce((a, x) => a | (1 << x), 0) });
-      if (ids.length < M.perColumn) gen(i + 1, ids);
+      bySize[ids.length].push({ ids: ids.slice(), h: h + fh[i], n: ids.length });
+      if (ids.length < M.perColumn) gen(i + 1, ids, h + fh[i]);
       ids.pop();
     }
-  })(0, []);
+  })(0, [], 0);
   bySize.forEach(list => list.sort((a, b) => a.h - b.h));
   const lowerBound = (list, v) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (list[m].h < v) lo = m + 1; else hi = m; } return lo; };
-  const others = [...Array(cols).keys()].filter(c => c !== aCol);
-  const scoreOf = (chosen, kept) => {
-    // photos from above that end up below the block, photos from below that come up, column changes
-    let down = 0, up = 0, moved = 0, count = 0;
-    free.forEach((f, i) => {
-      const where = chosen.get(i);
-      if (f.from === 'above' && where == null && !kept.has(i)) down++;
-      if (f.from === 'below' && where != null) up++;
-      if (f.from === 'above' && where != null && where !== f.col) moved++;
-      if (where != null) count++;
-    });
-    return { cross: down + up, moved, count };
-  };
-  const better = (a, b) => !b || a.cross < b.cross || (a.cross === b.cross && (a.moved < b.moved || (a.moved === b.moved && a.count < b.count)));
+
+  const used = new Uint8Array(free.length), chosenCol = new Int8Array(free.length).fill(-1);
   let best = null, steps = 0;
-  const keepOpts = c => {
-    const list = colList[c], fixedN = Math.max(0, list.length - M.swapTail), opts = [];
-    for (let j = list.length; j >= fixedN; j--) opts.push(list.slice(0, j));   // keep as many as possible first
-    return opts;
+  const score = (short, aStack) => {
+    let cross = 0, moved = 0, count = 0;
+    free.forEach((f, k) => {
+      const inAnchor = f.from === 'above' && f.col === aCol && aStack.includes(f.i);
+      const placed = chosenCol[k] >= 0 || (used[k] && !inAnchor);
+      if (f.from === 'above' && !placed && !inAnchor) cross++;
+      if (f.from === 'below' && chosenCol[k] >= 0) cross++;
+      if (f.from === 'above' && chosenCol[k] >= 0 && chosenCol[k] !== f.col) moved++;
+      if (chosenCol[k] >= 0) count++;
+    });
+    return { short, cross, moved, count };
   };
-  const chosen = new Map(), kept = new Set(), keepBy = new Map(), picks = new Map();
-  (function bt(k, mask) {
-    if (++steps > M.steps) return;
-    if (k === others.length) {
-      const sc = scoreOf(chosen, kept);
-      if (better(sc, best)) best = { ...sc, chosen: new Map(chosen), kept: new Set(kept), keepBy: others.map(c => keepBy.get(c)), picks: others.map(c => picks.get(c)) };
-      return;
-    }
-    const c = others[k];
-    for (const keepIdx of keepOpts(c)) {
-      const keepBits = keepIdx.filter(i => bit.has(must[i])).map(i => bit.get(must[i]));
-      if (keepBits.some(b => mask & (1 << b))) continue;
-      const kMask = keepBits.reduce((m, b) => m | (1 << b), 0);
-      const h = heightOf(keepIdx);
-      for (let n = 0; n <= M.perColumn; n++) {
-        const gapsN = keepIdx.length ? n : Math.max(0, n - 1), base0 = h + gap * gapsN;
-        const slack = M.maxExtraGap * (M.spaceKept ? Math.max(0, keepIdx.length + n - 1) : gapsN);
-        if (!keepIdx.length && !n) continue;
-        const list = bySize[n];
-        for (let x = lowerBound(list, T - slack - base0 - 0.5); x < list.length && list[x].h <= T - base0 + 0.5; x++) {
-          const s = list[x];
-          if (s.mask & (mask | kMask)) continue;
-          keepBits.forEach(b => kept.add(b)); s.ids.forEach(i => chosen.set(i, c));
-          keepBy.set(c, keepIdx); picks.set(c, s);
-          bt(k + 1, mask | kMask | s.mask);
-          keepBits.forEach(b => kept.delete(b)); s.ids.forEach(i => chosen.delete(i));
-          if (steps > M.steps) return;
+  const better = (a, b) => !b || a.short < b.short - 0.5 || (Math.abs(a.short - b.short) <= 0.5 && (a.cross < b.cross || (a.cross === b.cross && (a.moved < b.moved || (a.moved === b.moved && a.count < b.count)))));
+
+  for (const tol of M.tolerance) {
+    for (let d = 0; d <= Math.min(M.anchorDrop, aPos); d++) {
+      // The anchor's column: everything above it except the last d photos, then the anchor.
+      const aStack = colList[aCol].slice(0, aPos - d).concat([ai]), T = stackHeight(aStack);
+      // Photos just above the anchor that stay in its column are taken; the d dropped ones are free.
+      const aboveAnchor = colList[aCol].slice(Math.max(0, aPos - M.anchorDrop), aPos);
+      aboveAnchor.forEach(i => { used[slot.get(i)] = 1; });
+      colList[aCol].slice(aPos - d, aPos).forEach(i => { used[slot.get(i)] = 0; });
+      const plan = new Map();
+      steps = 0;
+      (function bt(k, short) {
+        if (++steps > M.steps) return;
+        if (best && short > best.short + 0.5) return;
+        if (k === others.length) {
+          const sc = score(short, aStack);
+          if (better(sc, best)) best = { ...sc, d, T, aStack: aStack.slice(), plan: new Map(plan) };
+          return;
         }
-      }
+        const c = others[k], list = colList[c], fixedN = Math.max(0, list.length - M.swapTail);
+        for (let j = list.length; j >= fixedN; j--) {                    // keep as many top photos as possible first
+          const keep = list.slice(0, j), keepSlots = keep.filter(i => slot.has(i)).map(i => slot.get(i));
+          if (keepSlots.some(x => used[x])) continue;
+          const h = stackHeight(keep);
+          if (h > T + 0.5) continue;
+          keepSlots.forEach(x => { used[x] = 1; });
+          for (let n = 0; n <= M.perColumn; n++) {
+            if (!keep.length && !n) continue;
+            const gapsN = keep.length ? n : Math.max(0, n - 1), base0 = h + gap * gapsN;
+            const slack = M.maxExtraGap * (M.spaceKept ? Math.max(0, keep.length + n - 1) : gapsN);
+            const lst = bySize[n];
+            for (let x = lowerBound(lst, T - slack - tol - base0 - 0.5); x < lst.length && lst[x].h <= T - base0 + 0.5; x++) {
+              const s = lst[x];
+              if (s.ids.some(id => used[id])) continue;
+              const shortHere = Math.max(0, T - (base0 + s.h) - slack);
+              s.ids.forEach(id => { used[id] = 1; chosenCol[id] = c; });
+              plan.set(c, { keep, s });
+              bt(k + 1, Math.max(short, shortHere));
+              s.ids.forEach(id => { used[id] = 0; chosenCol[id] = -1; });
+              if (steps > M.steps) break;
+            }
+          }
+          keepSlots.forEach(x => { used[x] = 0; });
+        }
+      })(0, 0);
+      aboveAnchor.forEach(i => { used[slot.get(i)] = 0; });
     }
-  })(0, 0);
+    if (best) break;
+  }
   if (!best) { swapCache.set(key, null); return null; }
-  // Build the section: anchor column as is, other columns = kept photos then the chosen ones.
+
+  // Build the section: the anchor's column, then each other column (kept photos, then the refill).
   const photos = [], assign = [], gapAbove = [], pulled = [];
-  aStack.forEach((i, k) => { photos.push(must[i]); assign.push(aCol); gapAbove.push(k ? base.gapAbove[i] : 0); });
-  others.forEach((c, k) => {
-    const keepIdx = best.keepBy[k], s = best.picks[k];
-    const gapsN = keepIdx.length ? s.n : Math.max(0, s.n - 1), e = heightOf(keepIdx) + s.h + gap * gapsN;
-    const spread = M.spaceKept ? Math.max(0, keepIdx.length + s.n - 1) : gapsN;      // gaps that share the extra space
-    const extra = spread ? Math.max(0, Math.min(T - e, M.maxExtraGap * spread)) / spread : 0;
-    keepIdx.forEach((i, j) => { photos.push(must[i]); assign.push(c); gapAbove.push(j ? base.gapAbove[i] + (M.spaceKept ? extra : 0) : 0); });
+  best.aStack.forEach((i, k) => { photos.push(must[i]); assign.push(aCol); gapAbove.push(k ? base.gapAbove[i] : 0); });
+  others.forEach(c => {
+    const { keep, s } = best.plan.get(c);
+    const gapsN = keep.length ? s.n : Math.max(0, s.n - 1), e = stackHeight(keep) + s.h + gap * gapsN;
+    const spread = M.spaceKept ? Math.max(0, keep.length + s.n - 1) : gapsN;      // gaps that share the extra space
+    const extra = spread ? Math.max(0, Math.min(best.T - e, M.maxExtraGap * spread)) / spread : 0;
+    keep.forEach((i, j) => { photos.push(must[i]); assign.push(c); gapAbove.push(j ? base.gapAbove[i] + (M.spaceKept ? extra : 0) : 0); });
     s.ids.forEach((x, j) => {
-      photos.push(free[x].p); assign.push(c); gapAbove.push(!keepIdx.length && j === 0 ? 0 : extra);
+      photos.push(free[x].p); assign.push(c); gapAbove.push(!keep.length && j === 0 ? 0 : extra);
       if (free[x].from === 'below') pulled.push(free[x].p);
     });
   });
   const inSection = new Set(photos);
-  const down = must.filter(p => !inSection.has(p));
-  const plan = { photos, assign, gapAbove, pulled, down, residual: 0 };
+  const plan = { photos, assign, gapAbove, pulled, down: must.filter(p => !inSection.has(p)), residual: best.short };
   swapCache.set(key, plan);
   return plan;
 }
