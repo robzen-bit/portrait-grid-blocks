@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portrait Grid Blocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+/* Builder chrome: Zenfolio UI tokens. The gallery inside the frame uses its own cream site look. */
+:root{
+  --zf-orange:#F26B3A; --zf-teal:#2DB3A6;
+  --bg:#F5F5F7; --surface:#FFFFFF; --text:#1D1D1F; --text-2:#424247; --text-3:#86868B; --line:#E8E8ED;
+  --seg-bg:#EDEDF0; --hover:rgba(0,0,0,.045);
+  --g-bg:#F6F1E8; --g-text:#2B2622;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C0C0E; --surface:#1C1C1E; --text:#F5F5F7; --text-2:#C7C7CC; --text-3:#8E8E93; --line:#2E2E33;
+    --seg-bg:#2A2A2E; --hover:rgba(255,255,255,.07); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C0C0E; --surface:#1C1C1E; --text:#F5F5F7; --text-2:#C7C7CC; --text-3:#8E8E93; --line:#2E2E33;
+  --seg-bg:#2A2A2E; --hover:rgba(255,255,255,.07); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button{font:inherit;color:inherit}
+
+/* Top bar */
+.bar{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:var(--surface);border-bottom:1px solid var(--line);flex:none}
+.bar-title{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.mark{width:28px;height:28px;border-radius:8px;background:var(--zf-orange);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.bar-title b{display:block;font-size:14px}
+.bar-title span{display:block;font-size:12px;color:var(--text-3);white-space:nowrap}
+.seg{display:inline-flex;background:var(--seg-bg);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;height:28px;padding:0 12px;border-radius:999px;font:500 12px Inter,sans-serif;color:var(--text-2);cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button small{color:var(--text-3);font-size:11px;margin-left:4px}
+.btn{height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font:600 12px Inter,sans-serif;cursor:pointer}
+.btn:hover{background:var(--hover)}
+.info{width:100%;display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-3)}
+.info span{padding:2px 9px;border-radius:999px;border:1px solid var(--line)}
+.info b{font-weight:500}
+
+/* Canvas: the gallery lays out at the chosen width and is scaled to fit */
+.canvas{flex:1;min-height:0;overflow:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+.wrap{position:relative;overflow:hidden;overflow:clip;margin:0 auto}
+.frame{display:flex;flex-direction:column;background:var(--g-bg);color:var(--g-text);font:19px/1.55 "Cormorant Garamond",Georgia,serif;transform-origin:top left;box-shadow:0 1px 3px rgba(0,0,0,.08),0 14px 44px rgba(0,0,0,.14);padding:56px 0 72px;--ui:1}
+
+/* Masonry */
+.grid{display:flex;flex-direction:column;flex:none}
+.sec{display:flex;align-self:center;align-items:flex-start;flex:none}
+.col{display:flex;flex-direction:column;flex:none}
+.ph{margin:0;position:relative}
+.ph-img{position:relative;overflow:hidden}
+.ph-img img{display:block;width:100%;height:100%;object-fit:cover}
+.seq{position:absolute;top:8px;left:8px;min-width:24px;height:22px;padding:0 7px;border-radius:999px;background:rgba(20,20,20,.74);color:#fff;font:600 12px/22px Inter,sans-serif;text-align:center;transform:scale(var(--ui));transform-origin:top left;pointer-events:none}
+.moved{position:absolute;bottom:8px;left:8px;background:rgba(45,179,166,.92);color:#fff;font:600 11px/1 Inter,sans-serif;padding:5px 8px;border-radius:999px;white-space:nowrap;transform:scale(var(--ui));transform-origin:bottom left;pointer-events:none}
+.ph-add{position:absolute;left:50%;z-index:4;width:26px;height:26px;padding:0;border-radius:999px;border:2px solid #fff;background:var(--zf-orange);color:#fff;display:grid;place-items:center;cursor:pointer;transform:translate(-50%,-50%) scale(var(--ui));box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .12s}
+.ph-add:hover,.ph-add:focus-visible{transform:translate(-50%,-50%) scale(calc(var(--ui) * 1.15));z-index:5}
+.ph-add .slot-label{left:50%;top:auto;bottom:calc(100% + 6px);transform:translateX(-50%)}   /* above, so it never runs off the edge */
+.ph-add:hover .slot-label,.ph-add:focus-visible .slot-label{opacity:1}
+
+/* Plus buttons above and below the grid, and after each block */
+.slot{position:relative;height:0;flex:none;align-self:stretch;z-index:6}
+.slot-hit{position:absolute;left:0;right:0;top:var(--st,0px);width:100%;height:calc(30px * var(--ui));transform:translateY(-50%);display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:none;padding:0}
+.slot-line{position:absolute;left:0;right:0;top:50%;border-top:calc(2px * var(--ui)) dashed var(--zf-orange);opacity:0;transition:opacity .12s}
+.slot-btn{position:relative;width:26px;height:26px;border-radius:999px;border:2px solid #fff;background:var(--zf-orange);color:#fff;display:grid;place-items:center;transform:scale(var(--ui));box-shadow:0 2px 8px rgba(0,0,0,.28)}
+.slot-label{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:#1D1D1F;color:#fff;font:600 12px/1 Inter,sans-serif;padding:7px 11px;border-radius:999px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s}
+.slot-hit:hover .slot-line,.slot-hit:hover .slot-label,.slot-hit:focus-visible .slot-label{opacity:1}
+
+/* Blocks */
+.blk{position:relative;align-self:center;flex:none;text-align:center;padding:64px 48px}
+.blk::after{content:"";position:absolute;inset:0;border:calc(2px * var(--ui)) dashed transparent;pointer-events:none}
+.blk:hover::after,.blk:focus-within::after{border-color:rgba(242,107,58,.7)}
+.blk h2{font-weight:500;font-size:46px;line-height:1.1;margin:0 0 14px;outline:none}
+.blk p{max-width:640px;margin:0 auto;font-size:20px;outline:none}
+.blk [contenteditable]:focus{background:rgba(242,107,58,.08)}
+.tag{position:absolute;top:10px;left:10px;transform:scale(var(--ui));transform-origin:top left;background:var(--zf-teal);color:#fff;font:600 11px/1 Inter,sans-serif;padding:6px 9px;border-radius:999px;white-space:nowrap}
+.del{position:absolute;top:10px;right:10px;transform:scale(var(--ui));transform-origin:top right;width:30px;height:30px;border:0;border-radius:999px;background:#1D1D1F;color:#fff;display:grid;place-items:center;cursor:pointer;opacity:0;transition:opacity .15s}
+.blk:hover .del,.del:focus-visible{opacity:1}
+.fit{position:absolute;bottom:10px;left:50%;transform:translateX(-50%) scale(var(--ui));transform-origin:bottom center;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.fit button{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:var(--zf-orange);color:#fff;font:600 12px/1 Inter,sans-serif;padding:9px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.fit.on{background:#1D1D1F;color:#fff;border-radius:999px;padding:3px 3px 3px 12px;font:600 12px/1 Inter,sans-serif;opacity:0;transition:opacity .15s}
+.fit.on button{background:rgba(255,255,255,.14);box-shadow:none;padding:7px 11px}
+.blk:hover .fit.on,.blk:focus-within .fit.on{opacity:1}
+
+.ask{position:absolute;bottom:10px;left:50%;transform:translateX(-50%) scale(var(--ui));transform-origin:bottom center;display:flex;align-items:center;gap:8px;white-space:nowrap;background:#fff;color:#1D1D1F;border-radius:999px;padding:5px 5px 5px 16px;font:600 12px/1 Inter,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.ask button{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:var(--zf-orange);color:#fff;font:600 12px/1 Inter,sans-serif;padding:9px 14px;cursor:pointer}
+.ask button.ghost{background:#EDEDF0;color:#1D1D1F}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);opacity:0;background:#1D1D1F;color:#fff;padding:10px 16px;border-radius:999px;font-weight:500;font-size:13px;transition:all .2s;pointer-events:none;z-index:10}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (max-width:760px){ .seg button small{display:none} }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-title"><span class="mark">z</span><div><b>Portrait Grid</b><span>Harper &amp; Lee Wedding</span></div></div>
+  <div class="seg" id="size" role="group" aria-label="Portrait size"></div>
+  <div class="seg" id="vp" role="group" aria-label="Viewport width"></div>
+  <button type="button" class="btn" id="reset">Reset</button>
+  <div class="info" id="info"></div>
+</header>
+<main class="canvas" id="canvas"><div class="wrap" id="wrap"><div class="frame" id="frame"></div></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ---------- Config: every number lives here ---------- */
+const CONFIG = {
+  photoCount: 80,
+  seed: 86637,
+  shapes: [                                  // share of the gallery, pixel size requested from picsum
+    { share: 0.45, px: [400, 600] },         // portrait 2:3
+    { share: 0.35, px: [600, 400] },         // landscape 3:2
+    { share: 0.10, px: [500, 500] },         // square
+    { share: 0.10, px: [400, 800] },         // very tall 1:2
+  ],
+  viewports: [['Desktop', 1440], ['Laptop', 1024], ['Tablet', 768], ['Phone', 390]],
+  sizes: {                                   // columns by width: [minWidth, count], checked top to bottom
+    small: { label: 'Portrait - Small', columns: [[768, 4], [600, 3], [0, 2]] },
+    large: { label: 'Portrait - Large', columns: [[600, 3], [0, 2]] },
+  },
+  content: { maxWidth: 1200, pad: 40, padPhone: 16, phoneBelow: 600 },
+  gap: 16,
+  // Shuffle for best fit: photos after a block it may pull from, most per column, most in all (by
+  // column count), search budget, most extra px added above a pulled photo.
+  // swapTail: last photos per column that may be swapped out; spaceKept: spacing may also grow above
+  // photos that stay in a rebuilt column (never in the clicked photo's column).
+  bestFit: { pool: 20, perColumn: 3, maxPull: { 2: 4, 3: 6, 4: 8 }, steps: 300000, maxExtraGap: 12, swapTail: 3, spaceKept: true },
+};
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+const ICON = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  shuffle: '<path d="M4 7h3c4 0 6 10 10 10h3M4 17h3c1.5 0 2.7-1.4 3.7-3M14 10.6C15 8.6 16 7 17 7h3M17 4l3 3-3 3M17 14l3 3-3 3"/>',
+};
+const svg = (n, s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200); }
+
+/* ---------- Fake gallery: fixed seeds so the same photos appear every time ---------- */
+function rng(seed) {
+  return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const PHOTOS = (() => {
+  const r = rng(CONFIG.seed), n = CONFIG.photoCount, shapes = [];
+  CONFIG.shapes.forEach(s => { for (let i = 0; i < Math.round(s.share * n); i++) shapes.push(s); });
+  while (shapes.length < n) shapes.push(CONFIG.shapes[0]);
+  shapes.length = n;
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [shapes[i], shapes[j]] = [shapes[j], shapes[i]]; }
+  return shapes.map((s, i) => ({ id: 'p' + (i + 1), index: i + 1, width: s.px[0], height: s.px[1], src: `https://picsum.photos/seed/zf-hl-${i + 1}/${s.px[0]}/${s.px[1]}` }));
+})();
+
+// Real photos come from picsum when it loads. Where it is blocked (inside an Artifact), each photo
+// gets a generated color fill instead; its shape and number are what matter here.
+let REMOTE_IMAGES = false;
+const TONES = [[24, 38], [32, 200], [205, 30], [145, 40], [18, 210], [195, 25], [40, 160], [350, 30], [215, 215], [28, 28]];
+function photoFill(k) {
+  const r = rng(CONFIG.seed * 31 + k), [h1, h2] = TONES[Math.floor(r() * TONES.length)];
+  return `radial-gradient(circle at ${Math.round(20 + r() * 60)}% ${Math.round(15 + r() * 45)}%, hsla(${h1},70%,88%,.6), transparent 42%), linear-gradient(${Math.round(150 + r() * 60)}deg, hsl(${h1},${Math.round(22 + r() * 25)}%,${Math.round(58 + r() * 22)}%), hsl(${h2},${Math.round(18 + r() * 25)}%,${Math.round(22 + r() * 22)}%))`;
+}
+const imgCache = new Map();
+function getImg(p) {
+  let img = imgCache.get(p.id);
+  if (!img) { img = new Image(); img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; img.src = p.src; imgCache.set(p.id, img); }
+  return img;
+}
+
+/* ---------- State, saved in this browser ---------- */
+const LS_KEY = 'zf-portrait-grid-v1';
+// order: photo numbers as currently arranged. cols and space: each photo's column and any extra spacing
+// above it when the order was saved, for the size and width it was saved at, so photos keep their places.
+const fresh = () => ({ size: 'small', width: 1440, order: null, cols: {}, space: {}, blocks: [] });
+let store = (() => { try { return { ...fresh(), ...JSON.parse(localStorage.getItem(LS_KEY)) }; } catch (e) { return fresh(); } })();
+function persist() { try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ } }
+
+/* =====================================================================
+   Masonry layout
+   ===================================================================== */
+function computeEnv(width) {
+  const C = CONFIG.content, phone = width < C.phoneBelow, pad = phone ? C.padPhone : C.pad;
+  return { width, phone, inner: Math.min(C.maxWidth, width - 2 * pad), gap: CONFIG.gap, capH: 0 };
+}
+function columnsFor(width) {
+  for (const [min, c] of CONFIG.sizes[store.size].columns) if (width >= min) return c;
+  return 1;
+}
+// Shortest-column placement, leftmost on ties, unless the photo has a saved column. Mutates heights,
+// returns the column for each photo.
+const savedCols = ctx => store.cols?.[`${store.size}@${ctx.env.width}`] || {};
+const savedSpace = ctx => store.space?.[`${store.size}@${ctx.env.width}`] || {};
+function placeShortest(heights, items, tileH, gap, saved = {}) {
+  return items.map(p => {
+    let b = saved[p.index];
+    if (b >= 0 && b < heights.length) { heights[b] += (heights[b] > 0 ? gap : 0) + tileH(p); return b; }
+    b = 0;
+    for (let c = 1; c < heights.length; c++) if (heights[c] < heights[b] - 0.5) b = c;
+    heights[b] += (heights[b] > 0 ? gap : 0) + tileH(p);
+    return b;
+  });
+}
+function masonryGeom(ctx) {
+  const { env, cols } = ctx, gap = env.gap, cw = (env.inner - gap * (cols - 1)) / cols;
+  const ih = p => cw * p.height / p.width;
+  return { gap, cw, ih, tileH: p => ih(p) + env.capH };
+}
+
+// Shuffle for best fit, first try. Only the photo the block was added under is fixed: its bottom edge is
+// the line, and its column stays as it is. Every other column keeps its top photos but its last one or
+// two can be swapped out, and the space down to the line is refilled with the closest matches: photos
+// from just above or just after the block whose heights reach the line exactly (a single photo the same
+// height is the ideal). Photos swapped out move to just below the block, in their order. Fewest photos
+// crossing the block wins, then fewest changing column, then fewest photos. Returns null if no exact fit.
+const swapCache = new Map();
+function swapToLine(must, pool, anchorIndex, ctx) {
+  const M = CONFIG.bestFit, cols = ctx.cols, { tileH, gap } = masonryGeom(ctx);
+  const base = plainSection(must, ctx);
+  const ai = must.findIndex(p => p.index === anchorIndex);
+  if (ai < 0) return null;
+  const key = [must.map(p => p.index).join(','), pool.map(p => p.index).join(','), anchorIndex, base.ends.map(Math.round).join(','), cols, gap].join('|');
+  if (swapCache.has(key)) return swapCache.get(key);
+  // Each column top to bottom, with each photo's position in the section.
+  const colList = Array.from({ length: cols }, () => []);
+  must.forEach((p, i) => colList[base.assign[i]].push(i));
+  const aCol = base.assign[ai];
+  const aStack = colList[aCol].slice(0, colList[aCol].indexOf(ai) + 1);
+  const heightOf = idxs => idxs.reduce((h, i, k) => h + (k ? gap + base.gapAbove[i] : 0) + tileH(must[i]), 0);
+  const T = heightOf(aStack);
+  // Photos that may move: the last photos of each other column, any photos under the anchor in its
+  // column, and the pool after the block.
+  const free = [];
+  colList.forEach((list, c) => {
+    if (c === aCol) list.slice(aStack.length).forEach(i => free.push({ p: must[i], from: 'above', col: c }));
+    else list.slice(Math.max(0, list.length - M.swapTail)).forEach(i => free.push({ p: must[i], from: 'above', col: c }));
+  });
+  pool.forEach(p => free.push({ p, from: 'below', col: -1 }));
+  if (free.length > 31) return null;   // photos are tracked as bits of one number
+  const bit = new Map(free.map((f, i) => [f.p, i]));
+  const fh = free.map(f => tileH(f.p));
+  const bySize = Array.from({ length: M.perColumn + 1 }, () => []);
+  bySize[0].push({ ids: [], h: 0, n: 0, mask: 0 });
+  (function gen(s, ids) {
+    for (let i = s; i < free.length; i++) {
+      ids.push(i);
+      bySize[ids.length].push({ ids: ids.slice(), h: ids.reduce((a, x) => a + fh[x], 0), n: ids.length, mask: ids.reduce((a, x) => a | (1 << x), 0) });
+      if (ids.length < M.perColumn) gen(i + 1, ids);
+      ids.pop();
+    }
+  })(0, []);
+  bySize.forEach(list => list.sort((a, b) => a.h - b.h));
+  const lowerBound = (list, v) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (list[m].h < v) lo = m + 1; else hi = m; } return lo; };
+  const others = [...Array(cols).keys()].filter(c => c !== aCol);
+  const scoreOf = (chosen, kept) => {
+    // photos from above that end up below the block, photos from below that come up, column changes
+    let down = 0, up = 0, moved = 0, count = 0;
+    free.forEach((f, i) => {
+      const where = chosen.get(i);
+      if (f.from === 'above' && where == null && !kept.has(i)) down++;
+      if (f.from === 'below' && where != null) up++;
+      if (f.from === 'above' && where != null && where !== f.col) moved++;
+      if (where != null) count++;
+    });
+    return { cross: down + up, moved, count };
+  };
+  const better = (a, b) => !b || a.cross < b.cross || (a.cross === b.cross && (a.moved < b.moved || (a.moved === b.moved && a.count < b.count)));
+  let best = null, steps = 0;
+  const keepOpts = c => {
+    const list = colList[c], fixedN = Math.max(0, list.length - M.swapTail), opts = [];
+    for (let j = list.length; j >= fixedN; j--) opts.push(list.slice(0, j));   // keep as many as possible first
+    return opts;
+  };
+  const chosen = new Map(), kept = new Set(), keepBy = new Map(), picks = new Map();
+  (function bt(k, mask) {
+    if (++steps > M.steps) return;
+    if (k === others.length) {
+      const sc = scoreOf(chosen, kept);
+      if (better(sc, best)) best = { ...sc, chosen: new Map(chosen), kept: new Set(kept), keepBy: others.map(c => keepBy.get(c)), picks: others.map(c => picks.get(c)) };
+      return;
+    }
+    const c = others[k];
+    for (const keepIdx of keepOpts(c)) {
+      const keepBits = keepIdx.filter(i => bit.has(must[i])).map(i => bit.get(must[i]));
+      if (keepBits.some(b => mask & (1 << b))) continue;
+      const kMask = keepBits.reduce((m, b) => m | (1 << b), 0);
+      const h = heightOf(keepIdx);
+      for (let n = 0; n <= M.perColumn; n++) {
+        const gapsN = keepIdx.length ? n : Math.max(0, n - 1), base0 = h + gap * gapsN;
+        const slack = M.maxExtraGap * (M.spaceKept ? Math.max(0, keepIdx.length + n - 1) : gapsN);
+        if (!keepIdx.length && !n) continue;
+        const list = bySize[n];
+        for (let x = lowerBound(list, T - slack - base0 - 0.5); x < list.length && list[x].h <= T - base0 + 0.5; x++) {
+          const s = list[x];
+          if (s.mask & (mask | kMask)) continue;
+          keepBits.forEach(b => kept.add(b)); s.ids.forEach(i => chosen.set(i, c));
+          keepBy.set(c, keepIdx); picks.set(c, s);
+          bt(k + 1, mask | kMask | s.mask);
+          keepBits.forEach(b => kept.delete(b)); s.ids.forEach(i => chosen.delete(i));
+          if (steps > M.steps) return;
+        }
+      }
+    }
+  })(0, 0);
+  if (!best) { swapCache.set(key, null); return null; }
+  // Build the section: anchor column as is, other columns = kept photos then the chosen ones.
+  const photos = [], assign = [], gapAbove = [], pulled = [];
+  aStack.forEach((i, k) => { photos.push(must[i]); assign.push(aCol); gapAbove.push(k ? base.gapAbove[i] : 0); });
+  others.forEach((c, k) => {
+    const keepIdx = best.keepBy[k], s = best.picks[k];
+    const gapsN = keepIdx.length ? s.n : Math.max(0, s.n - 1), e = heightOf(keepIdx) + s.h + gap * gapsN;
+    const spread = M.spaceKept ? Math.max(0, keepIdx.length + s.n - 1) : gapsN;      // gaps that share the extra space
+    const extra = spread ? Math.max(0, Math.min(T - e, M.maxExtraGap * spread)) / spread : 0;
+    keepIdx.forEach((i, j) => { photos.push(must[i]); assign.push(c); gapAbove.push(j ? base.gapAbove[i] + (M.spaceKept ? extra : 0) : 0); });
+    s.ids.forEach((x, j) => {
+      photos.push(free[x].p); assign.push(c); gapAbove.push(!keepIdx.length && j === 0 ? 0 : extra);
+      if (free[x].from === 'below') pulled.push(free[x].p);
+    });
+  });
+  const inSection = new Set(photos);
+  const down = must.filter(p => !inSection.has(p));
+  const plan = { photos, assign, gapAbove, pulled, down, residual: 0 };
+  swapCache.set(key, plan);
+  return plan;
+}
+
+// Shuffle for best fit. The photos above the block stay exactly where they are, and the block stays
+// under the photo it was added under: that photo's bottom edge is the line. The empty space in the
+// other columns is filled with photos pulled up from just after the block (up to perColumn per
+// column), so every column ends at the line; the spacing above pulled photos can grow a little to
+// close the last few px. A column that can't be filled exactly gets as close as it can without going
+// past the line, so the block never moves down. Fewest pulled photos wins, then the closest ones.
+const fillCache = new Map();
+function fillToLine(must, pool, ctx) {
+  const M = CONFIG.bestFit, cols = ctx.cols, { tileH, gap } = masonryGeom(ctx);
+  const base = plainSection(must, ctx), hs = base.ends, cnt = base.counts, T = Math.max(...hs);
+  const key = [must.map(p => p.index).join(','), pool.map(p => p.index).join(','), hs.map(Math.round).join(','), cols, gap].join('|');
+  if (fillCache.has(key)) return fillCache.get(key);
+  // Every group of up to perColumn pool photos, listed by size and sorted by height.
+  const ph = pool.map(tileH), bySize = Array.from({ length: M.perColumn + 1 }, () => []);
+  (function gen(s, ids) {
+    for (let i = s; i < pool.length; i++) {
+      ids.push(i);
+      bySize[ids.length].push({ ids: ids.slice(), h: ids.reduce((a, x) => a + ph[x], 0), n: ids.length, dist: ids.reduce((a, x) => a + x, 0), mask: ids.reduce((a, x) => a | (1 << x), 0) });
+      if (ids.length < M.perColumn) gen(i + 1, ids);
+      ids.pop();
+    }
+  })(0, []);
+  bySize.forEach(list => list.sort((a, b) => a.h - b.h));
+  const lowerBound = (list, v) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (list[m].h < v) lo = m + 1; else hi = m; } return lo; };
+  const endWith = (c, s) => hs[c] + s.h + gap * (cnt[c] ? s.n : s.n - 1);        // column end, before extra spacing
+  const slackOf = (c, s) => M.maxExtraGap * (cnt[c] ? s.n : Math.max(0, s.n - 1)); // extra spacing only above pulled photos
+  const level = c => T - hs[c] < 0.5;
+  const toFill = [...Array(cols).keys()].filter(c => !level(c)).sort((a, b) => hs[a] - hs[b]);
+
+  // Exact: every column reaches the line.
+  let best = null, steps = 0;
+  const pick = [];
+  (function bt(i, mask, pulls, dist) {
+    if (++steps > M.steps) return;
+    if (best && (pulls > best.pulls || (pulls === best.pulls && dist >= best.dist))) return;
+    if (i === toFill.length) { best = { pulls, dist, picks: pick.slice() }; return; }
+    const c = toFill[i];
+    for (let n = 1; n <= M.perColumn && pulls + n <= (M.maxPull[cols] || 6); n++) {
+      const list = bySize[n], base0 = endWith(c, { h: 0, n });
+      for (let x = lowerBound(list, T - slackOf(c, { n }) - base0 - 0.5); x < list.length && list[x].h <= T - base0 + 0.5; x++) {
+        const s = list[x];
+        if (s.mask & mask) continue;
+        pick[i] = s;
+        bt(i + 1, mask | s.mask, pulls + n, dist + s.dist);
+      }
+    }
+  })(0, 0, 0, 0);
+  // Otherwise: fill the emptiest columns first, each as close to the line as it gets without passing it.
+  if (!best) {
+    let mask = 0, pulls = 0;
+    best = { picks: toFill.map(c => {
+      let choice = null;
+      for (let n = 1; n <= M.perColumn && pulls + n <= (M.maxPull[cols] || 6); n++) {
+        const list = bySize[n], base0 = endWith(c, { h: 0, n });
+        for (let x = lowerBound(list, T - base0 + 0.5 + 1e-6) - 1; x >= 0; x--) {
+          if (list[x].mask & mask) continue;
+          const e = endWith(c, list[x]);
+          if (!choice || e > choice.e + 0.5) choice = { s: list[x], e };
+          break;
+        }
+      }
+      if (!choice) return null;
+      mask |= choice.s.mask; pulls += choice.s.n;
+      return choice.s;
+    }) };
+  }
+  const photos = must.slice(), assign = base.assign.slice(), gapAbove = base.gapAbove.slice(), pulled = [], ends = hs.slice();
+  toFill.forEach((c, i) => {
+    const s = best.picks[i]; if (!s) return;
+    const e = endWith(c, s), extra = Math.max(0, Math.min(T - e, slackOf(c, s))) / Math.max(1, cnt[c] ? s.n : s.n - 1);
+    s.ids.forEach((x, k) => { photos.push(pool[x]); assign.push(c); gapAbove.push(!cnt[c] && k === 0 ? 0 : extra); pulled.push(pool[x]); });
+    ends[c] = e + extra * (cnt[c] ? s.n : s.n - 1);
+  });
+  const plan = { photos, assign, gapAbove, pulled, residual: Math.max(...ends) - Math.min(...ends) };
+  fillCache.set(key, plan);
+  return plan;
+}
+
+// Plain section: photos in their usual order, shortest column first, no extra spacing.
+// Saved columns and spacing are kept where this size and width were saved.
+function plainSection(photos, ctx) {
+  const { tileH, gap } = masonryGeom(ctx), hs = Array(ctx.cols).fill(0), cols = savedCols(ctx), space = savedSpace(ctx);
+  const assign = [], gapAbove = [];
+  photos.forEach(p => {
+    let c = cols[p.index];
+    if (!(c >= 0 && c < ctx.cols)) { c = 0; for (let k = 1; k < ctx.cols; k++) if (hs[k] < hs[c] - 0.5) c = k; }
+    const extra = hs[c] > 0 ? space[p.index] || 0 : 0;
+    hs[c] += (hs[c] > 0 ? gap + extra : 0) + tileH(p);
+    assign.push(c); gapAbove.push(extra);
+  });
+  const counts = Array(ctx.cols).fill(0);
+  assign.forEach(c => counts[c]++);
+  return { photos, assign, gapAbove, ends: hs, counts, residual: Math.max(...hs) - Math.min(...hs) };
+}
+// Extra spacing above each photo of a section (none above the first photo in a column).
+function gapsAbove(plan) {
+  if (plan.gapAbove) return plan.gapAbove;
+  const seen = new Set();
+  return plan.photos.map((p, i) => { const c = plan.assign[i], first = !seen.has(c); seen.add(c); return first ? 0 : plan.extra[c]; });
+}
+
+/* =====================================================================
+   Gallery rendering
+   ===================================================================== */
+function slotEl(at, label, top) {
+  const s = el('div', 'slot');
+  s.style.setProperty('--st', top + 'px');
+  s.innerHTML = `<button type="button" class="slot-hit" data-act="add" data-at="${at}" aria-label="${esc(label)}"><span class="slot-line"></span><span class="slot-btn">${svg('plus', 14)}<span class="slot-label">${esc(label)}</span></span></button>`;
+  return s;
+}
+
+function renderSection(plan, ctx) {
+  const { env, cols } = ctx, { gap, cw, ih } = masonryGeom(ctx);
+  const sec = el('div', 'sec');
+  sec.style.width = env.inner + 'px'; sec.style.gap = gap + 'px';
+  const colEls = Array.from({ length: cols }, () => { const e = el('div', 'col'); e.style.width = cw + 'px'; sec.append(e); return e; });
+  const above = gapsAbove(plan), filled = new Set();
+  // The space under a photo is the space above the next photo in its column.
+  const below = plan.photos.map((p, i) => { const j = plan.photos.findIndex((q, k) => k > i && plan.assign[k] === plan.assign[i]); return gap + (j >= 0 ? above[j] : 0); });
+  plan.photos.forEach((p, i) => {
+    const f = el('figure', 'ph'), box = el('div', 'ph-img'), c = plan.assign[i];
+    f.dataset.i = p.index;
+    f.style.width = cw + 'px';
+    if (filled.has(c)) f.style.marginTop = gap + above[i] + 'px';
+    filled.add(c);
+    box.style.height = ih(p) + 'px';
+    box.style.background = photoFill(p.index);
+    if (REMOTE_IMAGES) box.append(getImg(p));
+    box.append(el('span', 'seq', String(p.index)));
+    const moved = ctx.moveLabels.get(p.index);
+    if (moved) box.append(el('span', 'moved', moved));
+    f.append(box);
+    // Plus centered in the gap below the photo: adds a block after it. It floats, so spacing is unchanged.
+    if (p.index < CONFIG.photoCount) {
+      const add = el('button', 'ph-add', `${svg('plus', 14)}<span class="slot-label">Add block after photo ${p.index}</span>`);
+      add.type = 'button'; add.dataset.act = 'add'; add.dataset.at = p.index;
+      add.setAttribute('aria-label', `Add block after photo ${p.index}`);
+      add.style.top = `calc(100% + ${below[i] / 2}px)`;
+      f.append(add);
+    }
+    colEls[plan.assign[i]].append(f);
+  });
+  return sec;
+}
+
+function renderBlock(p, env) {
+  const b = p.block, f = p.fit;
+  const sec = el('section', 'blk');
+  sec.dataset.id = b.id;
+  sec.style.width = env.inner + 'px';
+  sec.style.margin = p.inGrid ? `${env.gap}px 0` : '0';
+  if (env.phone) sec.style.padding = '40px 20px';
+  const fit = !f ? '' : b.ask
+    ? `<div class="ask"><span>Shuffle nearby photos for the best fit?</span><button type="button" data-act="fit" data-id="${b.id}">${svg('shuffle', 14)}Shuffle photos</button><button type="button" class="ghost" data-act="keep" data-id="${b.id}">Keep as is</button></div>`
+    : f.on ? `<div class="fit on"><span>Best fit on</span><button type="button" data-act="unfit" data-id="${b.id}">Undo</button></div>`
+    : f.needed ? `<div class="fit"><button type="button" data-act="fit" data-id="${b.id}">${svg('shuffle', 14)}Shuffle photos for best fit</button></div>` : '';
+  sec.innerHTML = `<span class="tag">${esc(p.tag)}</span>
+    <button type="button" class="del" data-act="del" data-id="${b.id}" title="Delete block" aria-label="Delete block">${svg('trash', 15)}</button>
+    <h2 contenteditable="true" spellcheck="false" data-f="title" data-id="${b.id}">${esc(b.title)}</h2>
+    <p contenteditable="true" spellcheck="false" data-f="text" data-id="${b.id}">${esc(b.text)}</p>${fit}`;
+  if (env.phone) sec.querySelector('h2').style.fontSize = '34px';
+  return sec;
+}
+
+let state = null;   // the latest layout, kept for checking in the console
+function render() {
+  const frame = $('#frame'), width = store.width, env = computeEnv(width), cols = columnsFor(width), N = CONFIG.photoCount;
+  const ctx = { env, cols, moveLabels: new Map() };
+
+  // The gallery in its current order. A block sits right after its anchor photo in this order; a block
+  // after the last photo sits under the grid.
+  const order = (store.order || PHOTOS.map(p => p.index)).map(i => PHOTOS[i - 1]);
+  const pos = new Map(order.map((p, i) => [p.index, i]));
+  const items = store.blocks.map(b => {
+    const a = b.anchor, w = a === 'top' || a === 'bottom' ? a : !pos.has(a.afterPhoto) || pos.get(a.afterPhoto) === N - 1 ? 'bottom' : a.afterPhoto;
+    return { id: b.id, block: b, where: w, tag: w === 'top' ? 'Above the photos' : w === 'bottom' ? 'Below the photos' : `After photo ${b.label ?? w}` };
+  });
+  const top = items.filter(p => p.where === 'top'), bottom = items.filter(p => p.where === 'bottom');
+  const inGrid = items.filter(p => typeof p.where === 'number');
+  const anchors = [...new Set(inGrid.map(p => p.where))].sort((a, b) => pos.get(a) - pos.get(b));
+  const anchorPhotos = new Set(anchors);      // a block's anchor photo is never pulled away by another block
+  const fitOn = ps => ps.some(p => p.block.bestFit);
+
+  // One section per block. Every photo up to the anchor photo stays above the block, in its order and
+  // column. With best fit on, photos from just after the block fill the other columns up to the line.
+  const B = CONFIG.bestFit, sections = [];
+  let remaining = order.slice();
+  anchors.forEach(a0 => {
+    const group = inGrid.filter(p => p.where === a0), on = fitOn(group);
+    const must = remaining.slice(0, remaining.findIndex(p => p.index === a0) + 1);
+    let plan;
+    if (on) {
+      const pool = remaining.slice(must.length).filter(p => !anchorPhotos.has(p.index)).slice(0, B.pool);   // may reach past the next block
+      const anchor = group.map(p => p.block.label).find(l => must.some(q => q.index === l)) ?? a0;
+      plan = swapToLine(must, pool, anchor, ctx) || fillToLine(must, pool, ctx);
+      plan.pulled.forEach(p => ctx.moveLabels.set(p.index, 'Moved up'));
+      (plan.down || []).forEach(p => ctx.moveLabels.set(p.index, 'Moved down'));
+    } else plan = { ...plainSection(must, ctx), pulled: [] };
+    const used = new Set(plan.photos);
+    remaining = remaining.filter(p => !used.has(p));
+    const nMoved = plan.pulled.length + (plan.down || []).length;
+    if (nMoved) group.forEach(p => { p.tag += ` · ${nMoved} photo${nMoved > 1 ? 's' : ''} swapped`; });
+    sections.push({ plan, group, a0, uneven: plan.residual > 2 });
+  });
+  // The photos after the last block. There is nothing below them to pull up, so blocks under the grid
+  // don't offer a shuffle.
+  const tail = remaining.length ? { plan: plainSection(remaining, ctx) } : null;
+  // A block offers best fit when the photos above it end unevenly.
+  sections.forEach(sec => sec.group.forEach(p => { p.fit = { on: !!p.block.bestFit, needed: sec.uneven }; p.inGrid = true; }));
+  bottom.forEach(p => { p.fit = null; });
+
+  const out = document.createDocumentFragment();
+  top.forEach(p => out.append(renderBlock(p, env)));
+  const grid = el('div', 'grid');
+  grid.append(slotEl('top', 'Add block above the photos', -28));
+  sections.forEach(sec => {
+    grid.append(renderSection(sec.plan, ctx));
+    sec.group.forEach(p => grid.append(renderBlock(p, env)));
+    grid.append(slotEl('blk:' + sec.group[0].id, 'Add block below this block', -env.gap / 2));
+  });
+  if (tail) grid.append(renderSection(tail.plan, ctx));
+  grid.append(slotEl('bottom', 'Add block below the photos', 28));
+  out.append(grid);
+  if (bottom.length) { const space = el('div'); space.style.height = '56px'; out.append(space); }
+  bottom.forEach(p => out.append(renderBlock(p, env)));
+  frame.replaceChildren(out);
+
+  state = { cols, ctx, sections, tail };
+  const vp = CONFIG.viewports.find(v => v[1] === width);
+  $('#info').innerHTML = `<span>${vp ? vp[0] : 'Custom'} ${width}px</span><span>${CONFIG.sizes[store.size].label}</span><span>${cols} columns</span><span>${N} photos</span><span>Scale <b id="scale"></b></span><span>Use an orange plus between photos to add a block</span>`;
+  fit();
+}
+
+// Saves the gallery exactly as shown right now (shuffles included): the photo order, and each photo's
+// column at this size and width, so photos keep their places. With a clicked photo, its section is cut
+// at that photo's bottom edge: photos ending at or above it stay above the new block, photos crossing
+// it move to just below. Every block is re-anchored to the last photo above it. Returns the photo the
+// new block should follow.
+function freezeOrder(clicked) {
+  if (!state) return clicked;
+  const { tileH, gap } = masonryGeom(state.ctx), cols = state.cols, seq = [], saved = {}, space = {};
+  const inPlacementOrder = plan => {      // top-down order that keeps every column's photos in sequence
+    const queues = Array.from({ length: cols }, () => []), hs = Array(cols).fill(0), out = [];
+    plan.photos.forEach((p, i) => queues[plan.assign[i]].push(p));
+    while (out.length < plan.photos.length) {
+      let c = -1;
+      for (let k = 0; k < cols; k++) if (queues[k].length && (c < 0 || hs[k] < hs[c] - 0.5)) c = k;
+      const p = queues[c].shift();
+      out.push(p); hs[c] += (hs[c] > 0 ? gap : 0) + tileH(p);
+    }
+    return out;
+  };
+  const bottomOf = i => document.querySelector(`.ph[data-i="${i}"]`)?.getBoundingClientRect().bottom ?? Infinity;
+  let after = clicked;
+  const all = state.sections.map(sec => ({ plan: sec.plan, group: sec.group })).concat(state.tail ? [{ plan: state.tail.plan, group: [] }] : []);
+  all.forEach(sec => {
+    const ga = gapsAbove(sec.plan);
+    sec.plan.photos.forEach((p, i) => { saved[p.index] = sec.plan.assign[i]; if (ga[i]) space[p.index] = ga[i]; });
+    let o = inPlacementOrder(sec.plan);
+    if (clicked != null && o.some(p => p.index === clicked)) {
+      const line = bottomOf(clicked) + 1, above = o.filter(p => bottomOf(p.index) <= line);
+      o = above.concat(o.filter(p => !above.includes(p)));
+      after = above[above.length - 1].index;
+    }
+    seq.push(...o);
+    sec.group.forEach(p => { p.block.label ??= p.where; p.block.anchor = { afterPhoto: o[o.length - 1].index }; });
+  });
+  store.order = seq.map(p => p.index);
+  store.cols = { [`${store.size}@${store.width}`]: saved };   // other widths fall back to normal placement
+  store.space = { [`${store.size}@${store.width}`]: space };
+  fillCache.clear();
+  return after;
+}
+
+// Scale the frame to fit the canvas while it lays out at the chosen width.
+function fit() {
+  const canvas = $('#canvas'), wrap = $('#wrap'), frame = $('#frame'), w = store.width;
+  const cs = getComputedStyle(canvas), avail = canvas.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const sc = Math.min(1, Math.max(120, avail) / w);
+  frame.style.width = w + 'px';
+  frame.style.transform = sc < 1 ? `scale(${sc})` : '';
+  frame.style.setProperty('--ui', Math.min(2, 1 / sc).toFixed(4));   // labels stay readable, up to 2x
+  wrap.style.width = w * sc + 'px';
+  wrap.style.height = frame.offsetHeight * sc + 'px';
+  const s = $('#scale'); if (s) s.textContent = Math.round(sc * 100) + '%';
+}
+
+function renderBar() {
+  $('#size').innerHTML = Object.keys(CONFIG.sizes).map(k => `<button type="button" class="${store.size === k ? 'on' : ''}" data-size="${k}">${k === 'small' ? 'Small' : 'Large'}</button>`).join('');
+  $('#vp').innerHTML = CONFIG.viewports.map(([label, w]) => `<button type="button" class="${store.width === w ? 'on' : ''}" data-w="${w}">${label}<small>${w}</small></button>`).join('');
+}
+function scrollToBlock(id) {
+  requestAnimationFrame(() => {
+    const e = document.querySelector(`.blk[data-id="${id}"]`), c = $('#canvas'); if (!e) return;
+    const r = e.getBoundingClientRect(), cr = c.getBoundingClientRect();
+    c.scrollTo({ top: c.scrollTop + r.top - cr.top - Math.max(60, (cr.height - r.height) / 2), behavior: 'smooth' });
+  });
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act],[data-size],[data-w],#reset');
+  if (!t) return;
+  if (t.dataset.size) { store.size = t.dataset.size; persist(); renderBar(); render(); return; }
+  if (t.dataset.w) { store.width = Number(t.dataset.w); persist(); renderBar(); render(); return; }
+  if (t.id === 'reset') { store = fresh(); persist(); renderBar(); render(); toast('Reset to an empty grid'); return; }
+  const id = t.dataset.id, b = store.blocks.find(x => x.id === id);
+  switch (t.dataset.act) {
+    case 'add': {
+      const at = t.dataset.at, photo = Number(at) || null;
+      const after = freezeOrder(photo);
+      const below = at.startsWith('blk:') && store.blocks.find(x => x.id === at.slice(4));
+      const anchor = below ? { ...below.anchor } : at === 'top' || at === 'bottom' ? at : { afterPhoto: after };
+      const nb = { id: 'b' + Date.now().toString(36), anchor, label: below ? below.label : Number(at) || undefined, bestFit: false, ask: anchor !== 'top',
+                   title: 'Chapter Title', text: 'Add a short note about this part of the day.' };
+      // Blocks after the same photo stack in list order: a plus under a photo goes above any block already
+      // there, the plus under a block goes right below it.
+      const same = x => typeof x.anchor === 'object' && typeof anchor === 'object' && x.anchor.afterPhoto === anchor.afterPhoto;
+      const at0 = below ? store.blocks.indexOf(below) + 1 : store.blocks.findIndex(same);
+      store.blocks.splice(at0 < 0 ? store.blocks.length : at0, 0, nb);
+      persist(); render(); scrollToBlock(nb.id);
+      break;
+    }
+    case 'keep': if (b) { b.ask = false; persist(); render(); } break;
+    case 'del': store.blocks = store.blocks.filter(x => x.id !== id); persist(); render(); toast('Block deleted'); break;
+    case 'fit': if (b) { b.bestFit = true; b.ask = false; persist(); render(); toast('Photos shuffled for best fit'); } break;
+    case 'unfit': if (b) { b.bestFit = false; persist(); render(); toast('Best fit turned off'); } break;
+  }
+});
+// Typing in a block saves its text without redrawing the grid.
+document.addEventListener('input', e => {
+  const t = e.target.closest('[data-f]'); if (!t) return;
+  const b = store.blocks.find(x => x.id === t.dataset.id); if (!b) return;
+  b[t.dataset.f] = t.textContent; persist();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('h2[data-f]')) { e.preventDefault(); e.target.blur(); } });
+new ResizeObserver(fit).observe($('#canvas'));
+new ResizeObserver(fit).observe($('#frame'));
+
+/* ---------- Boot ---------- */
+renderBar();
+render();
+(() => {   // switch to real photos only if picsum can be reached
+  const probe = new Image();
+  probe.onload = () => { REMOTE_IMAGES = true; render(); };
+  probe.src = 'https://picsum.photos/seed/zf-probe/8/8';
+})();
+</script>
+</body>
+</html>
